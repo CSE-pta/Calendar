@@ -922,20 +922,6 @@
   }
 </style>
 
-
-<style id="PUBLIC_PRINT_ARROW_HIDE_v20260509">
-@media print {
-  #prevBtn,
-  #nextBtn,
-  .nav-arrow,
-  button[aria-label*="next" i],
-  button[aria-label*="previous" i] {
-    display: none !important;
-    visibility: hidden !important;
-  }
-}
-</style>
-
 </head>
 <body>
   <div class="wrap">
@@ -2890,6 +2876,57 @@ window.addEventListener('beforeprint', function(){
       wrapped.__publicCleanWrapped = true;
       window.render = wrapped;
     }
+  });
+})();
+</script>
+
+
+<script id="GITHUB_PAGES_AUTO_DATA_LOADER_v20260509">
+(function(){
+  async function fetchTextIfExists(path){
+    try {
+      const r = await fetch(path + '?cache=' + Date.now(), {cache:'no-store'});
+      if (!r.ok) return null;
+      return await r.text();
+    } catch(e) {
+      return null;
+    }
+  }
+
+  async function fetchJsonIfExists(path){
+    try {
+      const r = await fetch(path + '?cache=' + Date.now(), {cache:'no-store'});
+      if (!r.ok) return null;
+      return await r.json();
+    } catch(e) {
+      return null;
+    }
+  }
+
+  async function loadPublicDataFiles(){
+    const dropdowns = await fetchJsonIfExists('pta_calendar_dropdown_menu_items.json');
+    if (dropdowns && typeof applyDropdownMenuData === 'function') {
+      applyDropdownMenuData(dropdowns.dropdowns || dropdowns);
+    }
+
+    const csv = await fetchTextIfExists('pta_calendar_functions.csv');
+    if (csv) {
+      if (typeof window.loadCSVTextIntoCalendar === 'function') {
+        window.loadCSVTextIntoCalendar(csv, 'pta_calendar_functions.csv');
+      } else if (typeof window.parseCSV === 'function' && typeof window.rowsToCalendarItems === 'function') {
+        const rows = window.parseCSV(csv);
+        const imported = window.rowsToCalendarItems(rows);
+        if (Array.isArray(imported)) {
+          items = imported;
+        }
+      }
+    }
+
+    if (typeof render === 'function') render();
+  }
+
+  window.addEventListener('DOMContentLoaded', function(){
+    setTimeout(loadPublicDataFiles, 150);
   });
 })();
 </script>
