@@ -306,5 +306,104 @@ var eventDate = parseDate(item.date);
   }
 })();
 </script>
+
+<script id="PUBLIC_AUTO_MONTH_ROTATION_JS">
+(function(){
+  const SCHOOL_MONTH_ORDER = [
+    {name:'August', month:7, year:2026},
+    {name:'September', month:8, year:2026},
+    {name:'October', month:9, year:2026},
+    {name:'November', month:10, year:2026},
+    {name:'December', month:11, year:2026},
+    {name:'January', month:0, year:2027},
+    {name:'February', month:1, year:2027},
+    {name:'March', month:2, year:2027},
+    {name:'April', month:3, year:2027},
+    {name:'May', month:4, year:2027}
+  ];
+
+  function schoolYearMonthIndex(now){
+    for(let i=0;i<SCHOOL_MONTH_ORDER.length;i++){
+      const m = SCHOOL_MONTH_ORDER[i];
+      if(now.getFullYear() === m.year && now.getMonth() === m.month) return i;
+    }
+
+    // Before the school year starts, keep normal Aug-May order.
+    if(now < new Date(2026,7,1)) return 0;
+
+    // After the school year ends, keep normal order until next year's file is loaded.
+    if(now > new Date(2027,4,31,23,59,59)) return 0;
+
+    return 0;
+  }
+
+  function rotatePublicMonths(){
+    const container = document.querySelector('.board-columns');
+    if(!container) return;
+
+    const months = Array.from(container.querySelectorAll('.board-month'));
+    if(months.length < 2) return;
+
+    const byName = new Map();
+    months.forEach(section => {
+      const title = section.querySelector('.board-month-title');
+      if(title) byName.set(String(title.textContent || '').trim(), section);
+    });
+
+    const startIndex = schoolYearMonthIndex(new Date());
+    const rotated = SCHOOL_MONTH_ORDER
+      .slice(startIndex)
+      .concat(SCHOOL_MONTH_ORDER.slice(0,startIndex));
+
+    const frag = document.createDocumentFragment();
+    rotated.forEach(m => {
+      const section = byName.get(m.name);
+      if(section) frag.appendChild(section);
+    });
+
+    // Append anything unexpected at the end rather than dropping it.
+    months.forEach(section => {
+      if(!frag.contains(section) && section.parentNode === container){
+        frag.appendChild(section);
+      }
+    });
+
+    container.innerHTML = '';
+    container.appendChild(frag);
+  }
+
+  function runWhenReady(){
+    rotatePublicMonths();
+    setTimeout(rotatePublicMonths, 100);
+    setTimeout(rotatePublicMonths, 500);
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', runWhenReady);
+  } else {
+    runWhenReady();
+  }
+
+  // Re-run after CSV rendering or other dynamic updates.
+  const observer = new MutationObserver(function(){
+    clearTimeout(window.__ptaMonthRotateTimer);
+    window.__ptaMonthRotateTimer = setTimeout(rotatePublicMonths, 50);
+  });
+
+  const startObserver = function(){
+    const target = document.querySelector('.board-columns');
+    if(target){
+      observer.observe(target, {childList:true, subtree:false});
+    }
+  };
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', startObserver);
+  } else {
+    startObserver();
+  }
+})();
+</script>
+
 </body>
 </html>
