@@ -241,11 +241,43 @@ html,body{
     return new Date(parseInt(p[0],10), parseInt(p[1],10)-1, 1).toLocaleDateString(undefined,{month:'long'});
   }
 
-  function monthOrderValue(key){
+  // Return today's date in the school's Florida (America/New_York) time zone.
+  // Using a YYYY-MM-DD string avoids a visitor's local time zone changing when
+  // an event is considered complete.
+  function floridaTodayIso(){
+    try {
+      var parts = new Intl.DateTimeFormat('en-US', {
+        timeZone:'America/New_York', year:'numeric', month:'2-digit', day:'2-digit'
+      }).formatToParts(new Date());
+      var vals = {};
+      parts.forEach(function(part){ if(part.type !== 'literal') vals[part.type] = part.value; });
+      return vals.year + '-' + vals.month + '-' + vals.day;
+    } catch(err) {
+      var now = new Date();
+      return now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+    }
+  }
+
+  // Original school-year position: Aug=0 ... May=9.
+  function schoolMonthIndex(key){
     var p = key.split('-').map(Number);
     if(p[0] === 2026 && p[1] >= 8 && p[1] <= 12) return p[1] - 8;
     if(p[0] === 2027 && p[1] >= 1 && p[1] <= 5) return p[1] + 4;
     return 999;
+  }
+
+  // Rotate the public calendar so the current month is first. Completed months
+  // move to the end only after their entire month has ended.
+  function rotatedMonthOrder(keys, todayIso){
+    var normal = keys.slice().sort(function(a,b){ return schoolMonthIndex(a)-schoolMonthIndex(b); });
+    if(!normal.length) return normal;
+
+    var currentKey = String(todayIso || '').slice(0,7);
+    var start = normal.indexOf(currentKey);
+
+    // Before Aug 2026 or after May 2027, retain the normal school-year order.
+    if(start < 0) return normal;
+    return normal.slice(start).concat(normal.slice(0,start));
   }
 
   function render(items){
@@ -266,7 +298,8 @@ html,body{
       groups[key].push(item);
     });
 
-    var keys = Object.keys(groups).sort(function(a,b){ return monthOrderValue(a)-monthOrderValue(b); });
+    var todayIso = floridaTodayIso();
+    var keys = rotatedMonthOrder(Object.keys(groups), todayIso);
 
     container.innerHTML = keys.map(function(key){
       var events = groups[key].map(function(item){
@@ -274,9 +307,9 @@ html,body{
         var day = d ? d.getDate() : '';
         var t = eventTime(item);
         var coord = '';
-var eventDate = parseDate(item.date);
-        var now = new Date('2026-08-06T12:00:00');
-        var pastClass = (eventDate && eventDate < now) ? ' past-event' : '';
+        // Cross out an event starting the day AFTER its date has passed.
+        // Compare ISO dates directly so this updates automatically every day.
+        var pastClass = (item.date && item.date < todayIso) ? ' past-event' : '';
         var location = item.location ? '<div class="board-event-location' + (pastClass ? ' past-event-location' : '') + '">Location: ' + esc(item.location) + '</div>' : '';
         return '<div class="board-event' + pastClass + '">' + day + ' - ' + esc(item.title) + (t ? ' ' + esc(t) : '') + location + '</div>';
       }).join('');
@@ -307,103 +340,7 @@ var eventDate = parseDate(item.date);
 })();
 </script>
 
-<script id="PUBLIC_AUTO_MONTH_ROTATION_JS">
-(function(){
-  const SCHOOL_MONTH_ORDER = [
-    {name:'August', month:7, year:2026},
-    {name:'September', month:8, year:2026},
-    {name:'October', month:9, year:2026},
-    {name:'November', month:10, year:2026},
-    {name:'December', month:11, year:2026},
-    {name:'January', month:0, year:2027},
-    {name:'February', month:1, year:2027},
-    {name:'March', month:2, year:2027},
-    {name:'April', month:3, year:2027},
-    {name:'May', month:4, year:2027}
-  ];
 
-  function schoolYearMonthIndex(now){
-    for(let i=0;i<SCHOOL_MONTH_ORDER.length;i++){
-      const m = SCHOOL_MONTH_ORDER[i];
-      if(now.getFullYear() === m.year && now.getMonth() === m.month) return i;
-    }
-
-    // Before the school year starts, keep normal Aug-May order.
-    if(now < new Date(2026,7,1)) return 0;
-
-    // After the school year ends, keep normal order until next year's file is loaded.
-    if(now > new Date(2027,4,31,23,59,59)) return 0;
-
-    return 0;
-  }
-
-  function rotatePublicMonths(){
-    const container = document.querySelector('.board-columns');
-    if(!container) return;
-
-    const months = Array.from(container.querySelectorAll('.board-month'));
-    if(months.length < 2) return;
-
-    const byName = new Map();
-    months.forEach(section => {
-      const title = section.querySelector('.board-month-title');
-      if(title) byName.set(String(title.textContent || '').trim(), section);
-    });
-
-    const startIndex = schoolYearMonthIndex(new Date());
-    const rotated = SCHOOL_MONTH_ORDER
-      .slice(startIndex)
-      .concat(SCHOOL_MONTH_ORDER.slice(0,startIndex));
-
-    const frag = document.createDocumentFragment();
-    rotated.forEach(m => {
-      const section = byName.get(m.name);
-      if(section) frag.appendChild(section);
-    });
-
-    // Append anything unexpected at the end rather than dropping it.
-    months.forEach(section => {
-      if(!frag.contains(section) && section.parentNode === container){
-        frag.appendChild(section);
-      }
-    });
-
-    container.innerHTML = '';
-    container.appendChild(frag);
-  }
-
-  function runWhenReady(){
-    rotatePublicMonths();
-    setTimeout(rotatePublicMonths, 100);
-    setTimeout(rotatePublicMonths, 500);
-  }
-
-  if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', runWhenReady);
-  } else {
-    runWhenReady();
-  }
-
-  // Re-run after CSV rendering or other dynamic updates.
-  const observer = new MutationObserver(function(){
-    clearTimeout(window.__ptaMonthRotateTimer);
-    window.__ptaMonthRotateTimer = setTimeout(rotatePublicMonths, 50);
-  });
-
-  const startObserver = function(){
-    const target = document.querySelector('.board-columns');
-    if(target){
-      observer.observe(target, {childList:true, subtree:false});
-    }
-  };
-
-  if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', startObserver);
-  } else {
-    startObserver();
-  }
-})();
-</script>
 
 </body>
 </html>
