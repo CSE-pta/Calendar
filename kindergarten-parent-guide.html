@@ -219,7 +219,22 @@
         border: 0;
       }
     }
-  </style>
+  
+
+    .guide-preview {
+      margin-top: 28px;
+      padding-top: 24px;
+      border-top: 1px solid #d7dee8;
+      scroll-margin-top: 18px;
+    }
+    .guide-preview h2 { margin: 0 0 8px; text-align:center; font-size:1.35rem; }
+    .guide-preview-note { margin:0 0 18px; text-align:center; color:#52606d; }
+    .guide-page {
+      display:block; width:100%; height:auto; margin:0 auto 22px;
+      border:1px solid #cbd5e1; border-radius:10px;
+      box-shadow:0 4px 16px rgba(15,23,42,.10); background:#fff;
+    }
+</style>
 </head>
 
 <body>
@@ -255,11 +270,9 @@
 
           <a
             class="button button-secondary"
-            href="CSE-Kindergarten-Parent-Guide-2026-2027.pdf"
-            target="_blank"
-            rel="noopener"
+            href="#guide-preview"
           >
-            View the PDF
+            View the Parent Guide
           </a>
         </div>
 
@@ -279,6 +292,15 @@
             <span>Cypress Springs Elementary PTA</span>
           </div>
         </div>
+
+        <section class="guide-preview" id="guide-preview" aria-labelledby="guide-preview-title">
+          <h2 id="guide-preview-title">Parent Guide Preview</h2>
+          <p class="guide-preview-note">Scroll through all four pages below. Use the download button above only if you want to save or print the PDF.</p>
+          <img class="guide-page" src="parent-guide-preview/page-1.png" alt="Kindergarten Parent Guide page 1">
+          <img class="guide-page" src="parent-guide-preview/page-2.png" alt="Kindergarten Parent Guide page 2" loading="lazy">
+          <img class="guide-page" src="parent-guide-preview/page-3.png" alt="Kindergarten Parent Guide page 3" loading="lazy">
+          <img class="guide-page" src="parent-guide-preview/page-4.png" alt="Kindergarten Parent Guide page 4" loading="lazy">
+        </section>
       </div>
 
       <footer class="footer">
