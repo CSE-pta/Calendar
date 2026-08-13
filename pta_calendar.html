@@ -6851,6 +6851,9 @@ window.addEventListener('beforeprint', function(){
 
   function boardManualCrossoutState(item){
     try {
+      if (typeof window.ptaDateOnlyCrossoutState === 'function') {
+        return window.ptaDateOnlyCrossoutState(item);
+      }
       var overrides = JSON.parse(localStorage.getItem('pta_manual_crossout_overrides_v1') || '{}') || {};
       var key = String((item && item.id) || '') || (String(item && item.date || '') + '|' + String(item && item.title || ''));
       var state = overrides[key];
@@ -7085,6 +7088,9 @@ window.addEventListener('beforeprint', function(){
 
   function boardManualCrossoutState(item){
     try {
+      if (typeof window.ptaDateOnlyCrossoutState === 'function') {
+        return window.ptaDateOnlyCrossoutState(item);
+      }
       var overrides = JSON.parse(localStorage.getItem('pta_manual_crossout_overrides_v1') || '{}') || {};
       var key = String((item && item.id) || '') || (String(item && item.date || '') + '|' + String(item && item.title || ''));
       var state = overrides[key];
@@ -7800,6 +7806,207 @@ window.addEventListener('beforeprint', function(){
        document.body.classList.contains('print-public-board-active')){
       rebuildPublicColumns();
     }
+  });
+})();
+</script>
+
+
+<script id="DATE_ONLY_CROSSOUT_MASTER34_FIX">
+(function(){
+  const CROSS_CUTOFF_KEY = 'pta_date_only_crossout_cutoff_v34';
+  const UNCROSS_CUTOFF_KEY = 'pta_date_only_uncross_cutoff_v34';
+  const OLD_OVERRIDE_KEY = 'pta_manual_crossout_overrides_v1';
+
+  function parseDateOnly(value){
+    if(!value) return null;
+    const s = String(value).trim();
+    const d = new Date(s + 'T12:00:00');
+    return isNaN(d) ? null : d;
+  }
+
+  function isoDate(d){
+    if(!d) return '';
+    return d.getFullYear() + '-' +
+      String(d.getMonth()+1).padStart(2,'0') + '-' +
+      String(d.getDate()).padStart(2,'0');
+  }
+
+  function currentCrossCutoff(){
+    const input = document.getElementById('manualCrossoutDate');
+    const inputDate = input && input.value ? parseDateOnly(input.value) : null;
+    if(inputDate) return inputDate;
+
+    try {
+      return parseDateOnly(localStorage.getItem(CROSS_CUTOFF_KEY) || '');
+    } catch(e){
+      return null;
+    }
+  }
+
+  function currentUncrossCutoff(){
+    try {
+      return parseDateOnly(localStorage.getItem(UNCROSS_CUTOFF_KEY) || '');
+    } catch(e){
+      return null;
+    }
+  }
+
+  function isCrossedByDate(item){
+    if(!item || !item.date) return false;
+
+    // Explicit Completed status remains crossed regardless of the selected cutoff.
+    if(String(item.status || '').trim().toLowerCase() === 'completed') return true;
+
+    const eventDate = parseDateOnly(item.date);
+    const cutoff = currentCrossCutoff();
+    if(!eventDate || !cutoff) return false;
+
+    const uncrossCutoff = currentUncrossCutoff();
+
+    // Date-only rule: never compare names/titles/IDs.
+    if(eventDate > cutoff) return false;
+    if(uncrossCutoff && eventDate <= uncrossCutoff) return false;
+    return true;
+  }
+
+  window.ptaDateOnlyCrossoutState = isCrossedByDate;
+  window.shouldPrintCrossOutItem = isCrossedByDate;
+
+  function clearLegacyOverrides(){
+    try { localStorage.removeItem(OLD_OVERRIDE_KEY); } catch(e){}
+  }
+
+  function refreshAll(){
+    try { if(typeof render === 'function') render(); } catch(e){}
+    try { if(typeof renderPrint === 'function') renderPrint(); } catch(e){}
+    try { if(typeof renderRows === 'function') renderRows(); } catch(e){}
+    try { if(typeof renderFunctionsPrintTable === 'function') renderFunctionsPrintTable(); } catch(e){}
+    try { if(typeof renderPtaMeetingPrint === 'function') renderPtaMeetingPrint(); } catch(e){}
+    setTimeout(applyDateOnlyScreenCrossout, 0);
+    setTimeout(applyDateOnlyScreenCrossout, 75);
+  }
+
+  window.manualCrossoutThroughDate = function(){
+    const input = document.getElementById('manualCrossoutDate');
+    const cutoff = parseDateOnly(input && input.value);
+    if(!cutoff){
+      alert('Please select a date first.');
+      return;
+    }
+
+    clearLegacyOverrides();
+    try {
+      localStorage.setItem(CROSS_CUTOFF_KEY, isoDate(cutoff));
+      localStorage.removeItem(UNCROSS_CUTOFF_KEY);
+    } catch(e){}
+
+    refreshAll();
+  };
+
+  window.manualUncrossoutThroughDate = function(){
+    const input = document.getElementById('manualCrossoutDate');
+    const cutoff = parseDateOnly(input && input.value);
+    if(!cutoff){
+      alert('Please select a date first.');
+      return;
+    }
+
+    clearLegacyOverrides();
+
+    // Keep the existing cross-through cutoff, but remove crossing through
+    // the selected uncross date. Example: crossed through 8/17, then
+    // uncross through 8/10 => 8/11-8/17 remain crossed.
+    try {
+      localStorage.setItem(UNCROSS_CUTOFF_KEY, isoDate(cutoff));
+    } catch(e){}
+
+    refreshAll();
+  };
+
+  function dayDatesForCurrentView(){
+    try {
+      if(typeof monthGrid === 'function'){
+        return monthGrid();
+      }
+    } catch(e){}
+    return [];
+  }
+
+  function applyDateOnlyScreenCrossout(){
+    // First remove the old title-based result so recurring event names
+    // (such as PTA Bike Ride) cannot inherit another occurrence's state.
+    document.querySelectorAll('.event-chip').forEach(function(chip){
+      chip.classList.remove('manual-crossed-out','manual-not-crossed-out');
+    });
+
+    const days = dayDatesForCurrentView();
+    const dayEls = Array.from(document.querySelectorAll('#calendar .day'));
+
+    dayEls.forEach(function(dayEl, idx){
+      const dayDate = days[idx];
+      if(!dayDate) return;
+
+      const pseudoItem = {
+        date: isoDate(dayDate),
+        status: ''
+      };
+
+      const crossed = isCrossedByDate(pseudoItem);
+      dayEl.querySelectorAll('.event-chip').forEach(function(chip){
+        chip.classList.remove('manual-crossed-out','manual-not-crossed-out');
+        if(crossed) chip.classList.add('manual-crossed-out');
+      });
+    });
+  }
+
+  // Wrap the final render so every month is corrected by its own date.
+  const previousRender = window.render;
+  if(typeof previousRender === 'function' && !previousRender.__dateOnlyMaster34){
+    window.render = function(){
+      const result = previousRender.apply(this, arguments);
+      setTimeout(applyDateOnlyScreenCrossout, 0);
+      return result;
+    };
+    window.render.__dateOnlyMaster34 = true;
+  }
+
+  // Ensure print builders see the corrected date-only function immediately.
+  const previousFunctionsPrint = window.printFunctionsTable;
+  if(typeof previousFunctionsPrint === 'function' && !previousFunctionsPrint.__dateOnlyMaster34){
+    window.printFunctionsTable = function(){
+      window.shouldPrintCrossOutItem = isCrossedByDate;
+      try { if(typeof renderFunctionsPrintTable === 'function') renderFunctionsPrintTable(); } catch(e){}
+      return previousFunctionsPrint.apply(this, arguments);
+    };
+    window.printFunctionsTable.__dateOnlyMaster34 = true;
+  }
+
+  const previousMeetingPrint = window.printPtaMeeting;
+  if(typeof previousMeetingPrint === 'function' && !previousMeetingPrint.__dateOnlyMaster34){
+    window.printPtaMeeting = function(){
+      window.shouldPrintCrossOutItem = isCrossedByDate;
+      try { if(typeof renderPtaMeetingPrint === 'function') renderPtaMeetingPrint(); } catch(e){}
+      return previousMeetingPrint.apply(this, arguments);
+    };
+    window.printPtaMeeting.__dateOnlyMaster34 = true;
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    clearLegacyOverrides();
+
+    // Restore the last selected cross-through date in the field.
+    try {
+      const stored = localStorage.getItem(CROSS_CUTOFF_KEY) || '';
+      const input = document.getElementById('manualCrossoutDate');
+      if(input && stored) input.value = stored;
+    } catch(e){}
+
+    setTimeout(applyDateOnlyScreenCrossout, 250);
+    setTimeout(applyDateOnlyScreenCrossout, 1000);
+  });
+
+  window.addEventListener('beforeprint', function(){
+    window.shouldPrintCrossOutItem = isCrossedByDate;
   });
 })();
 </script>
