@@ -10,17 +10,17 @@ const committees=[
 const seedMilestones=[['Finalize multiverse design plan','Decorating'],['Confirm landmark stations','Decorating'],['Create decoration supply list','Decorating'],['Select food menu','Food'],['Get food pricing and quantities','Food'],['Finalize serving plan','Food'],['Choose games and activities','Entertainment'],['Develop party run of show','Entertainment'],['Confirm sound and music needs','Entertainment'],['Choose fundraising activities','Fundraising'],['Coordinate possible Texas Roadhouse night','Fundraising'],['Track donations and revenue','Fundraising'],['Choose souvenir items','Swag'],['Approve designs and quantities','Swag'],['Place orders before deadline','Swag'],['Define upstairs area responsibilities','Upstairs'],['Approve upstairs layout','Upstairs'],['Assign day-of volunteers','Upstairs']].map(([title,committee],i)=>({id:`seed-${i}`,title,committee,status:'Not started',due_date:null}));
 const baseEvents=[{id:'meeting-nov16',title:'5th Grade Party Planning Meeting',date:'2026-11-16',description:'6:30 PM · Location TBD'}];
 const roomDefs=[['general','🌎','General Planning','Ideas and coordination across all committees.'],['announcements','📣','Announcements','Official updates from administrators; all members can read.'],...committees.map(c=>[c.name.toLowerCase(),'#',c.name,`${c.name} committee discussion.`])];
-const $=id=>document.getElementById(id);let supabase=null,user=null,recoveryMode=false,approved=false,role='member',room='general',milestones=[...seedMilestones],events=[...baseEvents],month=new Date(2026,10,1),chatChannel=null;
+const $=id=>document.getElementById(id);let supabase=null,user=null,recoveryMode=false,approved=false,role='member',room='general',milestones=[...seedMilestones],events=[...baseEvents],month=new Date(2026,10,1),chatChannel=null,publicNames=new Map(),myName='';
 const configured=!!(SUPABASE_URL&&SUPABASE_ANON_KEY),clean=s=>String(s??'');
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
 function navigate(page){if(!$(page))return;if(page!=='home'&&!approved){page='home';if(location.hash!=='#home')history.replaceState(null,'',location.pathname+'#home');/* Sign-in is available in the header only. */}document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id===page));document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('selected',a.dataset.nav===page));$('nav').classList.remove('open');window.scrollTo(0,0);if(page==='chat')loadMessages();}
 document.querySelectorAll('[data-go]').forEach(x=>x.addEventListener('click',()=>{location.hash=x.dataset.go;}));window.addEventListener('hashchange',()=>navigate(location.hash.slice(1)||'home'));document.querySelectorAll('[data-nav]').forEach(x=>x.addEventListener('click',()=>{}));$('menuToggle').onclick=()=>$('nav').classList.toggle('open');
-function renderCommittees(){const grid=$('committeeGrid');grid.replaceChildren();if(!approved)return;committees.forEach(c=>{let card=el('article',undefined,'committee-card');card.append(el('div',c.icon,'emoji'),el('h3',c.name),el('p',c.desc));let members=el('div',undefined,'members');c.members.forEach(n=>members.append(el('span',n)));card.append(members,el('p',`${c.members.length} confirmed member(s)`));grid.append(card);});}
+function renderCommittees(){const grid=$('committeeGrid');grid.replaceChildren();if(!approved)return;committees.forEach(c=>{let card=el('article',undefined,'committee-card');card.append(el('div',c.icon,'emoji'),el('h3',c.name),el('p',c.desc));let members=el('div',undefined,'roster-table');if(!c.members.length){members.append(el('p','Roster not loaded yet. An administrator can import the volunteer list.','muted'));}for(const m of c.members){const line=el('div',undefined,'roster-person');line.append(el('strong',m.display_name),el('span',m.registered?'Registered':'Not yet verified','roster-state '+(m.registered?'yes':'no')));if(role==='admin'&&!m.registered){const btn=el('button','Link account','icon-button');btn.onclick=async()=>{const email=prompt('Enter this volunteer’s registered email address to link their account. This email will not be displayed.');if(!email)return;const {data,error}=await supabase.rpc('party_link_roster',{p_roster_id:m.id,p_email:email.trim()});if(error){alert(error.message);return;}if(!data){alert('No account matches that email yet. The person needs to register first.');return;}await loadSharedData();};line.append(btn);}members.append(line);}card.append(members,el('p',`${c.members.length} listed volunteer(s) · ${c.members.filter(m=>m.registered).length} registered`));grid.append(card);});}
 function renderMilestones(){let fil=$('milestoneFilter').value;let filtered=milestones.filter(m=>fil==='All'||m.committee===fil);let done=filtered.filter(m=>m.status==='Completed').length;$('milestoneSummary').textContent=`${done} / ${filtered.length} complete`;let list=$('milestoneList');list.replaceChildren();filtered.forEach(m=>{let item=el('div',undefined,'milestone');item.append(el('i',m.status==='Completed'?'✓':'◎'));let desc=el('div');desc.append(el('h3',m.title),el('p',`${m.committee} · ${m.due_date||'Due date TBD'}`));item.append(desc,el('span',m.status,'status '+(m.status==='Completed'?'completed':'')));if(role==='admin'&&approved&&typeof m.id==='number'){let b=el('button','Edit','icon-button');b.title='Update milestone';b.onclick=()=>openMilestoneEdit(m);item.append(b);}list.append(item);});}
 function renderCalendar(){const fmt=new Intl.DateTimeFormat('en-US',{month:'long',year:'numeric'});$('monthLabel').textContent=fmt.format(month);let y=month.getFullYear(),m=month.getMonth(),start=new Date(y,m,1).getDay(),total=new Date(y,m+1,0).getDate(),grid=$('calendarGrid');grid.replaceChildren();for(let i=0;i<start;i++)grid.append(el('div','','day other'));for(let d=1;d<=total;d++){let date=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;let match=events.filter(e=>e.date===date);let day=el('div',d,'day '+(match.length?'event':''));match.forEach(e=>day.append(el('small',e.title)));grid.append(day);}const list=$('eventList');list.replaceChildren();events.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{let wrapper=el('div',undefined,'event-item'),d=el('div',new Date(e.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}),'event-date'),details=el('div');details.append(el('strong',e.title),el('p',e.description||e.date));wrapper.append(d,details);list.append(wrapper);});}
 function renderRooms(){const wrap=$('roomButtons');wrap.replaceChildren();roomDefs.forEach(([id,icon,name])=>{let b=el('button',`${icon}  ${name}`,'room-btn'+(id===room?' active':''));b.onclick=()=>{room=id;renderRooms();loadMessages();};wrap.append(b);});let r=roomDefs.find(r=>r[0]===room);$('roomTitle').textContent='# '+r[2].toLowerCase().replaceAll(' ','-');$('roomDescription').textContent=r[3];$('roomTag').textContent=room==='announcements'?'Admin posts only':'Team room';let allowed=!!user&&approved&&(room!=='announcements'||role==='admin');$('chatInput').disabled=!allowed;$('chatSend').disabled=!allowed;$('chatInput').placeholder=!configured?'Chat setup required...':!user?'Sign in to post a message...':!allowed?'Only admins can post in this channel...':'Share an idea with the team...';}
 async function loadMessages(){renderRooms();let wrap=$('messages');wrap.replaceChildren();if(!supabase||!user||!approved){let node=el('div',undefined,'empty-state');node.append(el('div','🔒'),el('h3',configured?'Sign in and wait for approval to join':'Chat activation required'),el('p',configured?'Member accounts must be approved by an administrator.':'The site is ready for private chat after Supabase setup.'));wrap.append(node);return;}
-const {data,error}=await supabase.from('messages').select('id,room_id,body,created_at,display_name').eq('room_id',room).order('created_at',{ascending:true}).limit(200);if(error){wrap.append(el('p',`Unable to load messages: ${error.message}`,'muted'));return;}if(!data.length)wrap.append(el('p','No messages yet. Start the conversation.','muted'));data.forEach(m=>{let div=el('div',undefined,'message');div.append(el('strong',m.display_name||'Member'),el('small',new Date(m.created_at).toLocaleString()),el('p',m.body));wrap.append(div);});wrap.scrollTop=wrap.scrollHeight;
+const {data,error}=await supabase.from('messages').select('id,room_id,user_id,body,created_at').eq('room_id',room).order('created_at',{ascending:true}).limit(200);if(error){wrap.append(el('p',`Unable to load messages: ${error.message}`,'muted'));return;}if(!data.length)wrap.append(el('p','No messages yet. Start the conversation.','muted'));data.forEach(m=>{let div=el('div',undefined,'message');div.append(el('strong',publicNames.get(m.user_id)||'Member'),el('small',new Date(m.created_at).toLocaleString()),el('p',m.body));wrap.append(div);});wrap.scrollTop=wrap.scrollHeight;
 if(chatChannel)await supabase.removeChannel(chatChannel);chatChannel=supabase.channel('messages-'+room).on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:`room_id=eq.${room}`},()=>loadMessages()).subscribe();}
 function showPasswordSetup(){
  recoveryMode=true;
@@ -28,7 +28,7 @@ function showPasswordSetup(){
  $('authDialog').querySelector('p').textContent='Choose a new password for your account (at least 8 characters).';
  $('authPassword').value='';
  $('authPassword').setAttribute('autocomplete','new-password');
- $('savePasswordButton').hidden=false;
+ $('savePasswordButton').hidden=false; $('profileForm').hidden=!approved;
  $('signInButton').hidden=true;
  $('signUpButton').hidden=true;
  $('resetPasswordButton').hidden=true;
@@ -39,14 +39,15 @@ function showPasswordSetup(){
 function showAccountDialog(){
  if(!user){showSignInDialog();return;}
  showPasswordSetup();
+ $('profileForm').hidden=!approved; $('profileFullName').value=myName;
 }
 function showSignInDialog(){
  recoveryMode=false;
  $('authDialog').querySelector('h2').textContent='Member Sign In';
  $('authDialog').querySelector('p').textContent='Private committee conversations are for approved members.';
  $('authPassword').value='';
- $('authPassword').setAttribute('autocomplete','current-password');
- $('savePasswordButton').hidden=true;
+ $('authPassword').setAttribute('autocomplete','current-password'); $('signupNames').hidden=true;
+ $('savePasswordButton').hidden=true; $('profileForm').hidden=true;
  $('signInButton').hidden=false;
  $('signUpButton').hidden=false;
  $('resetPasswordButton').hidden=false;
@@ -66,7 +67,7 @@ async function initBackend(){
    if(event==='SIGNED_OUT'){
     recoveryMode=false;
     $('authDialog').querySelector('h2').textContent='Member Sign In';
-    $('savePasswordButton').hidden=true;
+    $('savePasswordButton').hidden=true; $('profileForm').hidden=true;
     $('signInButton').hidden=false;
     $('signUpButton').hidden=false;
     $('resetPasswordButton').hidden=false;
@@ -88,8 +89,13 @@ async function initBackend(){
   console.error('Supabase initialization failed',e);
  }
 }
-async function refreshAccount(){role='member';approved=false;if(user&&supabase){const {data}=await supabase.from('members').select('role').eq('user_id',user.id).single();if(data?.role){role=data.role;approved=true;}}$('accountBtn').hidden=!user;$('accountBtn').textContent=user?`${user.email?.split('@')[0]} · Account / Password`:'Account / Password';document.querySelectorAll('[data-private],[data-home-private]').forEach(e=>e.hidden=!approved);$('nav').hidden=!approved;$('accessNotice').hidden=!!user;const login=$('accessLogin');if(login)login.onclick=showSignInDialog;if(!approved)navigate('home');$('signOutButton').hidden=!user;document.querySelectorAll('.admin-only').forEach(e=>e.hidden=role!=='admin'||!approved);await loadSharedData();renderRooms();if(location.hash==='#chat')loadMessages();}
-async function loadSharedData(){if(!supabase||!user||!approved)return;const roster=await supabase.from('committee_roster').select('committee,display_name').order('display_name');if(!roster.error){committees.forEach(c=>c.members=roster.data.filter(x=>x.committee===c.name).map(x=>x.display_name));}renderCommittees();let [a,b]=await Promise.all([supabase.from('milestones').select('id,title,committee,status,due_date').order('created_at'),supabase.from('events').select('id,title,date,description').order('date')]);if(!a.error&&a.data?.length)milestones=a.data;if(!b.error&&b.data?.length)events=b.data;renderMilestones();renderCalendar();await loadBudget();}
+async function refreshAccount(){role='member';approved=false;myName='';if(user&&supabase){const {data}=await supabase.from('members').select('role,display_name').eq('user_id',user.id).single();if(data?.role){role=data.role;approved=true;myName=data.display_name||'';}}$('accountBtn').hidden=!user;$('accountBtn').textContent=user?`${approved?(myName||'My Account'):'My Account'} · Account / Password`:'Account / Password';document.querySelectorAll('[data-private],[data-home-private]').forEach(e=>e.hidden=!approved);$('nav').hidden=!approved;$('accessNotice').hidden=!!user;const login=$('accessLogin');if(login)login.onclick=showSignInDialog;if(!approved)navigate('home');$('signOutButton').hidden=!user;document.querySelectorAll('.admin-only').forEach(e=>e.hidden=role!=='admin'||!approved);await loadSharedData();renderRooms();if(location.hash==='#chat')loadMessages();}
+async function loadSharedData(){if(!supabase||!user||!approved)return;
+ const [names,roster]=await Promise.all([supabase.rpc('party_member_names'),supabase.rpc('party_committee_roster')]);
+ if(!names.error){publicNames=new Map((names.data||[]).map(n=>[n.user_id,n.display_name]));myName=publicNames.get(user.id)||myName;}
+ if(!roster.error){committees.forEach(c=>c.members=(roster.data||[]).filter(x=>x.committee===c.name).map(x=>({id:x.id,display_name:x.display_name,registered:x.registered})));}
+ renderCommittees();let [a,b]=await Promise.all([supabase.from('milestones').select('id,title,committee,status,due_date').order('created_at'),supabase.from('events').select('id,title,date,description').order('date')]);if(!a.error&&a.data?.length)milestones=a.data;if(!b.error&&b.data?.length)events=b.data;renderMilestones();renderCalendar();await loadBudget();if(location.hash==='#chat')await loadMessages();}
+
 
 $('accountBtn').onclick=()=>showAccountDialog();
 const authFeedback=(message)=>{$('authMessage').textContent=message;};
@@ -102,11 +108,12 @@ $('signInButton').onclick=async()=>{
  authFeedback(error?error.message:'Signed in. Loading your account…');
 };
 $('signUpButton').onclick=async()=>{
+ if($('signupNames').hidden){$('signupNames').hidden=false;authFeedback('Enter your first and last name, then click Create an account again.');return;}
  if(!supabase){authFeedback('Sign-in is not configured.');return;}
  const email=$('authEmail').value.trim(),password=$('authPassword').value;
  if(!email||password.length<8){authFeedback('Enter an email and a password of at least 8 characters.');return;}
  authFeedback('Creating account…');
- const {data,error}=await supabase.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname}});
+ const first=$('signupFirstName').value.trim(),last=$('signupLastName').value.trim();if(!/^[\p{L}][\p{L} .'-]{0,49}$/u.test(first)||!/^[\p{L}][\p{L} .'-]{0,49}$/u.test(last)){authFeedback('Enter your first and last name before creating an account.');return;}const {data,error}=await supabase.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname,data:{first_name:first,last_name:last}}});
  authFeedback(error?error.message:data.session?'Account created and signed in. An administrator must approve access.':'Account requested. Check your email to confirm your address; an administrator must then approve access.');
 };
 $('resetPasswordButton').onclick=async()=>{
@@ -123,13 +130,14 @@ $('savePasswordButton').onclick=async()=>{
  if(error){authFeedback(error.message);return;}
  recoveryMode=false;
  $('authPassword').value='';
- $('savePasswordButton').hidden=true;
+ $('savePasswordButton').hidden=true; $('profileForm').hidden=true;
  $('authDialog').querySelector('h2').textContent='Account / Password';
  authFeedback('Password saved. You can use it to sign in next time.');
 };
+$('profileSave').onclick=async()=>{if(!approved||!supabase)return;const proposed=$('profileFullName').value.trim();if(!/^[\p{L}][\p{L} .'-]{1,99}$/u.test(proposed)||proposed.split(/\s+/).length<2){authFeedback('Please enter your first and last name.');return;}const {error}=await supabase.from('members').update({display_name:proposed}).eq('user_id',user.id);if(error){authFeedback(error.message);return;}myName=proposed;await refreshAccount();authFeedback('Name saved. Chat will display your full name.');};
 $('signOutButton').onclick=async()=>{await supabase?.auth.signOut();$('authDialog').close();};
 
-$('chatForm').onsubmit=async ev=>{ev.preventDefault();if(!supabase||!user||!approved||room==='announcements'&&role!=='admin')return;let body=$('chatInput').value.trim();if(!body)return;const {error}=await supabase.from('messages').insert({room_id:room,body,display_name:user.email?.split('@')[0]||'Member'});if(error){alert(`Could not send: ${error.message}`);return;}$('chatInput').value='';await loadMessages();};
+$('chatForm').onsubmit=async ev=>{ev.preventDefault();if(!supabase||!user||!approved||room==='announcements'&&role!=='admin')return;let body=$('chatInput').value.trim();if(!body)return;const {error}=await supabase.from('messages').insert({room_id:room,body,display_name:myName||'Member'});if(error){alert(`Could not send: ${error.message}`);return;}$('chatInput').value='';await loadMessages();};
 let editMode='milestone', editMilestoneId=null;function openMilestoneEdit(m){openEditor('milestone');editMilestoneId=m.id;$('editHeading').textContent='Update milestone';$('editName').value=m.title;$('editCommittee').value=m.committee;$('editStatus').value=m.status;$('editDate').value=m.due_date||'';}function openEditor(mode){editMilestoneId=null;editMode=mode;$('editHeading').textContent=mode==='milestone'?'Add milestone':'Add calendar event';$('editCommittee').parentElement.hidden=mode!=='milestone';$('editStatus').parentElement.hidden=mode!=='milestone';$('editDialog').showModal();}$('addMilestone').onclick=()=>openEditor('milestone');$('addEvent').onclick=()=>openEditor('event');$('closeEdit').onclick=()=>$('editDialog').close();$('editForm').onsubmit=async e=>{e.preventDefault();if(!supabase||role!=='admin')return;let name=$('editName').value.trim(),date=$('editDate').value;if(!name)return;let values={title:name,committee:$('editCommittee').value,status:$('editStatus').value,due_date:date||null};let res=editMode==='milestone'?(editMilestoneId?await supabase.from('milestones').update(values).eq('id',editMilestoneId):await supabase.from('milestones').insert(values)):await supabase.from('events').insert({title:name,date,description:'Added by committee admin'});if(res.error){$('editMessage').textContent=res.error.message;return;}$('editDialog').close();$('editForm').reset();await loadSharedData();};
 
 const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
