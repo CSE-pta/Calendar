@@ -9,3 +9,8 @@
 /* Roster and identity: hide private forms correctly */
 [hidden]{display:none!important}
 .roster-table{display:grid;gap:.45rem;margin:.8rem 0}.roster-person{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.5rem .7rem;border:1px solid #d5e9f7;border-radius:.65rem;background:#f5faff;color:#163a6a}.roster-person strong{font-size:.9rem}.roster-state{font-size:.75rem;white-space:nowrap;border-radius:2rem;padding:.25rem .6rem;background:#eef1f5;color:#536273}.roster-state.yes{background:#d8f7e7;color:#16553c}.signup-names{border-top:1px solid #e1edf6;padding-top:10px;display:grid;gap:6px}.signup-names label{font-size:.82rem}
+
+/* Private member profile */
+.profile-panel{max-width:620px;background:#f5fbff;color:#163966;padding:30px;border-radius:22px;box-shadow:0 12px 36px #133a6522}
+#memberProfileForm{display:grid;gap:16px}#memberProfileForm label{display:grid;gap:7px;font-weight:700}#memberProfileForm input{min-height:44px;border:1px solid #a9cbeb;border-radius:12px;padding:10px 12px;font:inherit;max-width:100%;box-sizing:border-box}#memberProfileForm input:disabled{background:#e5edf4;color:#526b82}#memberProfileForm button{justify-self:start}
+.message .icon-button{margin-left:auto;font-size:.76rem}
