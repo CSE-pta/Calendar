@@ -37,8 +37,22 @@ function showPasswordSetup(){
  if(!$('authDialog').open)$('authDialog').showModal();
 }
 function showAccountDialog(){
- if(!user){$('authDialog').showModal();return;}
+ if(!user){showSignInDialog();return;}
  showPasswordSetup();
+}
+function showSignInDialog(){
+ recoveryMode=false;
+ $('authDialog').querySelector('h2').textContent='Member Sign In';
+ $('authDialog').querySelector('p').textContent='Private committee conversations are for approved members.';
+ $('authPassword').value='';
+ $('authPassword').setAttribute('autocomplete','current-password');
+ $('savePasswordButton').hidden=true;
+ $('signInButton').hidden=false;
+ $('signUpButton').hidden=false;
+ $('resetPasswordButton').hidden=false;
+ $('signOutButton').hidden=true;
+ authFeedback('');
+ if(!$('authDialog').open)$('authDialog').showModal();
 }
 async function initBackend(){
  if(!configured)return;
@@ -74,9 +88,9 @@ async function initBackend(){
   console.error('Supabase initialization failed',e);
  }
 }
-async function refreshAccount(){role='member';approved=false;if(user&&supabase){const {data}=await supabase.from('members').select('role').eq('user_id',user.id).single();if(data?.role){role=data.role;approved=true;}}$('accountBtn').textContent=user?`${user.email?.split('@')[0]} · Account / Password`:'Member sign in ↗';document.querySelectorAll('[data-private],[data-home-private]').forEach(e=>e.hidden=!approved);$('nav').hidden=!approved;$('accessNotice').hidden=approved;$('accessNotice').innerHTML=approved?'':'🔒 This planning portal requires an approved member account. <button type="button" id="accessLogin" class="primary small">Member sign in</button>';const login=$('accessLogin');if(login)login.onclick=()=>$('authDialog').showModal();if(!approved)navigate('home');$('signOutButton').hidden=!user;document.querySelectorAll('.admin-only').forEach(e=>e.hidden=role!=='admin'||!approved);await loadSharedData();renderRooms();if(location.hash==='#chat')loadMessages();}
+async function refreshAccount(){role='member';approved=false;if(user&&supabase){const {data}=await supabase.from('members').select('role').eq('user_id',user.id).single();if(data?.role){role=data.role;approved=true;}}$('accountBtn').textContent=user?`${user.email?.split('@')[0]} · Account / Password`:'Member sign in ↗';document.querySelectorAll('[data-private],[data-home-private]').forEach(e=>e.hidden=!approved);$('nav').hidden=!approved;$('accessNotice').hidden=approved;$('accessNotice').innerHTML=approved?'':'🔒 This planning portal requires an approved member account. <button type="button" id="accessLogin" class="primary small">Member sign in</button>';const login=$('accessLogin');if(login)login.onclick=showSignInDialog;if(!approved)navigate('home');$('signOutButton').hidden=!user;document.querySelectorAll('.admin-only').forEach(e=>e.hidden=role!=='admin'||!approved);await loadSharedData();renderRooms();if(location.hash==='#chat')loadMessages();}
 async function loadSharedData(){if(!supabase||!user||!approved)return;const roster=await supabase.from('committee_roster').select('committee,display_name').order('display_name');if(!roster.error){committees.forEach(c=>c.members=roster.data.filter(x=>x.committee===c.name).map(x=>x.display_name));}renderCommittees();let [a,b]=await Promise.all([supabase.from('milestones').select('id,title,committee,status,due_date').order('created_at'),supabase.from('events').select('id,title,date,description').order('date')]);if(!a.error&&a.data?.length)milestones=a.data;if(!b.error&&b.data?.length)events=b.data;renderMilestones();renderCalendar();await loadBudget();}
-$('accessLogin')?.addEventListener('click',()=> $('authDialog').showModal());
+$('accessLogin')?.addEventListener('click',showSignInDialog);
 $('accountBtn').onclick=()=>showAccountDialog();
 const authFeedback=(message)=>{$('authMessage').textContent=message;};
 $('signInButton').onclick=async()=>{
@@ -110,6 +124,7 @@ $('savePasswordButton').onclick=async()=>{
  recoveryMode=false;
  $('authPassword').value='';
  $('savePasswordButton').hidden=true;
+ $('authDialog').querySelector('h2').textContent='Account / Password';
  authFeedback('Password saved. You can use it to sign in next time.');
 };
 $('signOutButton').onclick=async()=>{await supabase?.auth.signOut();$('authDialog').close();};

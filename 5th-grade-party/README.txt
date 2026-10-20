@@ -1,9 +1,7 @@
-CSE 5th Grade Party — Password Recovery Repair
+CSE Party public dashboard and sign-in cleanup
 
-Fixes: recovery dialog closed immediately after clicking a Supabase recovery email.
-Adds: Account / Password button for signed-in users, allowing password creation without a second email.
+Replace ONLY index.html, app.js, and styles.css in Calendar/5th-grade-party/ on GitHub. Do not replace config.js or change Supabase.
 
-Upload app.js and index.html to CSE-pta/Calendar/5th-grade-party/ (replace existing files).
-Leave config.js, database and all other website files alone.
-Wait for GitHub Pages deployment, refresh the site. If logged in, click Account / Password in the upper right, enter a NEW password (8+ characters), click Save new password. Then optionally sign out and test sign-in.
-Never send your password or API secret through ChatGPT.
+Changes: Four home statistics cards remain visible before sign-in. All protected committee, calendar, budget, chat, and document areas remain gated. Normal sign-in hides the Save new password button. It appears only when following a recovery link or selecting Account / Password while signed in.
+
+Refresh website using Ctrl+Shift+R after GitHub Pages deploys. Test in a signed-out/private window and a signed-in window. Security also requires Supabase Row Level Security and private storage; front-end hiding alone does not secure content.
