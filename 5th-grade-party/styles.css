@@ -14,3 +14,72 @@
 .profile-panel{max-width:620px;background:#f5fbff;color:#163966;padding:30px;border-radius:22px;box-shadow:0 12px 36px #133a6522}
 #memberProfileForm{display:grid;gap:16px}#memberProfileForm label{display:grid;gap:7px;font-weight:700}#memberProfileForm input{min-height:44px;border:1px solid #a9cbeb;border-radius:12px;padding:10px 12px;font:inherit;max-width:100%;box-sizing:border-box}#memberProfileForm input:disabled{background:#e5edf4;color:#526b82}#memberProfileForm button{justify-self:start}
 .message .icon-button{margin-left:auto;font-size:.76rem}
+
+
+/* Mobile usability update — desktop design remains unchanged. */
+[hidden]{display:none!important}
+button,a,input,select,textarea{touch-action:manipulation}
+:focus-visible{outline:3px solid #09aee3;outline-offset:3px}
+@media (max-width:780px){
+ html{scroll-padding-top:88px}
+ body{background-attachment:scroll}
+ .topbar{padding:12px 16px;gap:10px;min-height:68px}
+ .brand{font-size:14px;letter-spacing:.4px;min-width:0}
+ .brand small{font-size:8px;letter-spacing:.7px}
+ .brand-icon{font-size:25px}
+ .menu-toggle{min-width:46px;min-height:46px;border:1px solid #9fcaf66a;border-radius:12px;line-height:1}
+ .topbar nav.open:not([hidden]){display:flex;gap:2px;padding:10px;background:#102f62;border:1px solid #97cbef57;border-radius:13px}
+ .topbar nav a{padding:13px 14px;border-radius:9px;min-height:44px;font-size:15px}
+ .topbar nav a.selected{background:#ffffff1c}
+ .account-btn{min-height:44px;padding:10px 12px}
+ .section{min-height:0;padding:25px 15px 52px}
+ .hero{min-height:0;grid-template-columns:minmax(0,1fr)}
+ .hero h1{font-size:clamp(39px,10.5vw,58px);letter-spacing:-1.3px;overflow-wrap:normal}
+ .hero p{font-size:15px;line-height:1.65}
+ .hero-art{height:270px;transform:none;margin:0;overflow:hidden}
+ .portal{width:178px;height:178px}
+ .world{font-size:88px}
+ .landmark{font-size:47px}
+ .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:14px 0 35px}
+ .stat-card{min-width:0;padding:15px 13px;border-radius:16px}
+ .stat-card>span{font-size:9px;line-height:1.4;letter-spacing:1px}
+ .stat-card strong{font-size:clamp(18px,5vw,24px);line-height:1.18;overflow-wrap:anywhere}
+ .stat-card small{font-size:11px;line-height:1.4}
+ .feature-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ .feature{padding:17px;min-width:0}
+ .feature h3{font-size:17px}
+ .feature p{min-height:0}
+ .committee-card,.panel{padding:19px}
+ .toolbar{gap:10px}.toolbar select,.toolbar button{min-height:44px}
+ .milestone{flex-wrap:wrap;padding:15px}
+ .milestone .status{margin-left:0}
+ .day{min-height:43px;font-size:12px}
+ .chat-shell{grid-template-columns:minmax(0,1fr);min-height:0;border-radius:17px}
+ .chat-sidebar{padding:12px 10px}
+ .chat-sidebar #roomButtons{display:flex;gap:7px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding-bottom:5px}
+ .room-btn{min-height:44px;padding:11px 14px;flex:0 0 auto}
+ .chat-header{padding:15px;gap:10px}
+ .chat-header h3{font-size:16px;overflow-wrap:anywhere}
+ .messages{min-height:270px;max-height:min(53dvh,470px);padding:13px;overscroll-behavior:contain}
+ .message{overflow-wrap:anywhere}
+ .chat-compose{gap:8px;padding:11px;align-items:stretch}
+ .chat-compose input{width:100%;min-width:0;padding:13px;font-size:16px}
+ .chat-compose button{padding:10px 14px;min-height:46px;white-space:nowrap}
+ .profile-panel{padding:20px;max-width:100%}
+ .profile-panel input{max-width:100%;font-size:16px}
+ .dialog-form{padding:24px 20px;max-height:calc(100dvh - 40px);overflow-y:auto}
+ .dialog-form input,.dialog-form select{font-size:16px;width:100%;max-width:100%}
+ dialog{max-height:calc(100dvh - 24px);max-width:calc(100% - 20px)}
+ .primary,.outline{min-height:44px}
+ .meeting-banner{padding:24px}
+}
+@media(max-width:380px){
+ .brand{font-size:12px}
+ .brand small{font-size:7px}
+ .hero h1{font-size:39px}
+ .stat-card{padding:12px 10px}
+ .stat-card strong{font-size:18px}
+ .feature-grid{grid-template-columns:1fr}
+ .chat-compose button{padding:9px 11px}
+}
+@media(prefers-reduced-motion:reduce){.portal{animation:none}html{scroll-behavior:auto}}

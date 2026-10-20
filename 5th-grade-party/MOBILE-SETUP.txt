@@ -1,0 +1,10 @@
+CSE Party Mobile Ready Update
+
+1. Extract this ZIP.
+2. Upload and replace only index.html, app.js and styles.css in CSE-pta/Calendar/5th-grade-party/ on GitHub.
+3. DO NOT replace config.js or run SQL. The Supabase configuration, members, messages and database remain unchanged.
+4. Wait for GitHub Pages to deploy and refresh on phone.
+5. Test at narrow phones (~320px), ordinary phones (~390px) and tablet widths: home cards, menu, committees, My Profile, chat rooms, message send/delete, calendar and sign-in.
+6. Verify signed-out views do not expose private sections. The server must still enforce member permissions.
+
+This is an incremental mobile enhancement based on the latest locally available Profile & Chat Delete build. If additional changes have been made to app.js or other site files since that build, merge those changes rather than overwriting them.
