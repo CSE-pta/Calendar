@@ -63,3 +63,19 @@ alter publication supabase_realtime add table public.messages;
 -- Replace example below and run it in SQL Editor using a trusted administrator account:
 -- insert into public.members (user_id, display_name, role) values ('USER-UUID-HERE', 'Committee Admin', 'admin');
 -- Members must NEVER be able to insert themselves into public.members.
+
+-- ADDITIONAL BUDGET TABLE: safe to run along with the full schema on a new project.
+create table if not exists public.budget_transactions (
+ id bigint generated always as identity primary key,
+ kind text not null check (kind in ('income','expense','allocation')),
+ category text not null check (char_length(category) between 1 and 80),
+ description text not null check (char_length(description) between 1 and 160),
+ amount numeric(12,2) not null check (amount > 0),
+ entry_date date not null,
+ created_at timestamptz not null default now()
+);
+alter table public.budget_transactions enable row level security;
+create policy "approved members read budget" on public.budget_transactions for select to authenticated using ((select public.is_member()));
+create policy "admins add budget" on public.budget_transactions for insert to authenticated with check ((select public.is_admin()));
+create policy "admins change budget" on public.budget_transactions for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+create policy "admins delete budget" on public.budget_transactions for delete to authenticated using ((select public.is_admin()));

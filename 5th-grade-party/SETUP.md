@@ -11,7 +11,7 @@
 
 ## Important limits
 
-This is a ready-to-deploy **starter site**, not a deployed or connected service. Chat messages are not stored until you configure Supabase. There is no image upload, searchable history, push notification, editable existing milestone, contact directory, document storage, or interactive budget accounting yet. Do not describe those as implemented.
+This is a ready-to-deploy **starter site**, not a deployed or connected service. Chat messages are not stored until you configure Supabase. There is no photo upload, full chat history search, push notification, private contact directory, or document storage yet. Administrators can now update saved milestones and add budget ledger entries after the backend is configured. Do not describe those as implemented.
 
 **Private data:** Never copy committee phone numbers, emails, chat exports, passwords, or service_role API keys into this public repository. The HTML contains member names only; if you need membership names to be private too, move committee details behind authenticated access before publishing.
 
@@ -48,8 +48,8 @@ This is a ready-to-deploy **starter site**, not a deployed or connected service.
 
 - Uploads in a private Supabase Storage bucket with membership-aware access policies.
 - Admin-managed contact directory (phone numbers), visible only to approved members.
-- Editable milestone status, due dates, assigned owners, task completion and decision log.
-- Proper budget entries, fundraising income, spending approvals.
+- Assigned task owners, approvals and decision log.
+- Editing/deleting budget entries, approval workflow and exports.
 - Chat message search, notification opt-in and read markers.
 - Separate public student/parent info vs strictly private planning pages.
 
@@ -60,3 +60,6 @@ This is a ready-to-deploy **starter site**, not a deployed or connected service.
 - `app.js` navigation, committee cards, calendar, milestones, authentication, optional persisted chat
 - `config.js` Supabase configuration (blank by default)
 - `supabase-schema.sql` secure tables and database policies
+
+## Upgrade existing site
+Replace `index.html`, `styles.css`, `app.js` and `config.js` in the existing `5th-grade-party` GitHub folder. Preserve your previous configured `config.js` if it already contains valid Supabase project settings. If you already executed the old `supabase-schema.sql`, execute ONLY the additional `budget_transactions` section from the bottom of the new schema (do not rerun the complete schema, since its policies already exist).
