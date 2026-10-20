@@ -10,7 +10,7 @@ const committees=[
 const seedMilestones=[['Finalize multiverse design plan','Decorating'],['Confirm landmark stations','Decorating'],['Create decoration supply list','Decorating'],['Select food menu','Food'],['Get food pricing and quantities','Food'],['Finalize serving plan','Food'],['Choose games and activities','Entertainment'],['Develop party run of show','Entertainment'],['Confirm sound and music needs','Entertainment'],['Choose fundraising activities','Fundraising'],['Coordinate possible Texas Roadhouse night','Fundraising'],['Track donations and revenue','Fundraising'],['Choose souvenir items','Swag'],['Approve designs and quantities','Swag'],['Place orders before deadline','Swag'],['Define upstairs area responsibilities','Upstairs'],['Approve upstairs layout','Upstairs'],['Assign day-of volunteers','Upstairs']].map(([title,committee],i)=>({id:`seed-${i}`,title,committee,status:'Not started',due_date:null}));
 const baseEvents=[{id:'meeting-nov16',title:'5th Grade Party Planning Meeting',date:'2026-11-16',description:'6:30 PM · Location TBD'}];
 const roomDefs=[['general','🌎','General Planning','Ideas and coordination across all committees.'],['announcements','📣','Announcements','Official updates from administrators; all members can read.'],...committees.map(c=>[c.name.toLowerCase(),'#',c.name,`${c.name} committee discussion.`])];
-const $=id=>document.getElementById(id);let supabase=null,user=null,approved=false,role='member',room='general',milestones=[...seedMilestones],events=[...baseEvents],month=new Date(2026,10,1),chatChannel=null;
+const $=id=>document.getElementById(id);let supabase=null,user=null,recoveryMode=false,approved=false,role='member',room='general',milestones=[...seedMilestones],events=[...baseEvents],month=new Date(2026,10,1),chatChannel=null;
 const configured=!!(SUPABASE_URL&&SUPABASE_ANON_KEY),clean=s=>String(s??'');
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
 function navigate(page){if(!$(page))return;if(page!=='home'&&!approved){page='home';if(location.hash!=='#home')history.replaceState(null,'',location.pathname+'#home');$('accessNotice').textContent='🔒 Sign in with an approved member account to access committee planning.';}document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id===page));document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('selected',a.dataset.nav===page));$('nav').classList.remove('open');window.scrollTo(0,0);if(page==='chat')loadMessages();}
@@ -22,11 +22,62 @@ function renderRooms(){const wrap=$('roomButtons');wrap.replaceChildren();roomDe
 async function loadMessages(){renderRooms();let wrap=$('messages');wrap.replaceChildren();if(!supabase||!user||!approved){let node=el('div',undefined,'empty-state');node.append(el('div','🔒'),el('h3',configured?'Sign in and wait for approval to join':'Chat activation required'),el('p',configured?'Member accounts must be approved by an administrator.':'The site is ready for private chat after Supabase setup.'));wrap.append(node);return;}
 const {data,error}=await supabase.from('messages').select('id,room_id,body,created_at,display_name').eq('room_id',room).order('created_at',{ascending:true}).limit(200);if(error){wrap.append(el('p',`Unable to load messages: ${error.message}`,'muted'));return;}if(!data.length)wrap.append(el('p','No messages yet. Start the conversation.','muted'));data.forEach(m=>{let div=el('div',undefined,'message');div.append(el('strong',m.display_name||'Member'),el('small',new Date(m.created_at).toLocaleString()),el('p',m.body));wrap.append(div);});wrap.scrollTop=wrap.scrollHeight;
 if(chatChannel)await supabase.removeChannel(chatChannel);chatChannel=supabase.channel('messages-'+room).on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:`room_id=eq.${room}`},()=>loadMessages()).subscribe();}
-async function initBackend(){if(!configured)return;try{const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');supabase=createClient(SUPABASE_URL,SUPABASE_ANON_KEY);const {data,error:sessionError}=await supabase.auth.getSession();if(sessionError)console.warn('Supabase session:',sessionError.message);user=data.session?.user||null;supabase.auth.onAuthStateChange((event,s)=>{user=s?.user||null;if(event==='PASSWORD_RECOVERY'){$('authDialog').showModal();$('authMessage').textContent='Enter a new password, then select Save new password.';$('savePasswordButton').hidden=false;}if(user&&$('authDialog').open)$('authDialog').close();setTimeout(refreshAccount,0);});await refreshAccount();if(user&&$('authDialog').open)$('authDialog').close();}catch(e){$('chatStatus').textContent='Chat setup could not be loaded: '+e.message;authFeedback('Connection error: '+e.message);console.error('Supabase initialization failed',e);}}
-async function refreshAccount(){role='member';approved=false;if(user&&supabase){const {data}=await supabase.from('members').select('role').eq('user_id',user.id).single();if(data?.role){role=data.role;approved=true;}}$('accountBtn').textContent=user?`${user.email?.split('@')[0]} · Sign out`:'Member sign in ↗';document.querySelectorAll('[data-private],[data-home-private]').forEach(e=>e.hidden=!approved);$('nav').hidden=!approved;$('accessNotice').hidden=approved;$('accessNotice').innerHTML=approved?'':'🔒 This planning portal requires an approved member account. <button type="button" id="accessLogin" class="primary small">Member sign in</button>';const login=$('accessLogin');if(login)login.onclick=()=>$('authDialog').showModal();if(!approved)navigate('home');$('signOutButton').hidden=!user;document.querySelectorAll('.admin-only').forEach(e=>e.hidden=role!=='admin'||!approved);await loadSharedData();renderRooms();if(location.hash==='#chat')loadMessages();}
+function showPasswordSetup(){
+ recoveryMode=true;
+ $('authDialog').querySelector('h2').textContent='Set your password';
+ $('authDialog').querySelector('p').textContent='Choose a new password for your account (at least 8 characters).';
+ $('authPassword').value='';
+ $('authPassword').setAttribute('autocomplete','new-password');
+ $('savePasswordButton').hidden=false;
+ $('signInButton').hidden=true;
+ $('signUpButton').hidden=true;
+ $('resetPasswordButton').hidden=true;
+ $('signOutButton').hidden=false;
+ authFeedback('Enter your new password and select Save new password.');
+ if(!$('authDialog').open)$('authDialog').showModal();
+}
+function showAccountDialog(){
+ if(!user){$('authDialog').showModal();return;}
+ showPasswordSetup();
+}
+async function initBackend(){
+ if(!configured)return;
+ try{
+  const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+  supabase=createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+  // Register the listener before getSession so password-recovery events are not missed.
+  supabase.auth.onAuthStateChange((event,s)=>{
+   user=s?.user||null;
+   if(event==='PASSWORD_RECOVERY')showPasswordSetup();
+   if(event==='SIGNED_OUT'){
+    recoveryMode=false;
+    $('authDialog').querySelector('h2').textContent='Member Sign In';
+    $('savePasswordButton').hidden=true;
+    $('signInButton').hidden=false;
+    $('signUpButton').hidden=false;
+    $('resetPasswordButton').hidden=false;
+    $('signOutButton').hidden=true;
+    if($('authDialog').open)$('authDialog').close();
+   }
+   // Do not close the dialog during recovery; the user must be allowed to set a password.
+   if(event==='SIGNED_IN'&&!recoveryMode&&$('authDialog').open)$('authDialog').close();
+   setTimeout(refreshAccount,0);
+  });
+  const {data,error:sessionError}=await supabase.auth.getSession();
+  if(sessionError)console.warn('Supabase session:',sessionError.message);
+  user=data.session?.user||null;
+  await refreshAccount();
+  if(user&&!recoveryMode&&$('authDialog').open)$('authDialog').close();
+ }catch(e){
+  $('chatStatus').textContent='Chat setup could not be loaded: '+e.message;
+  authFeedback('Connection error: '+e.message);
+  console.error('Supabase initialization failed',e);
+ }
+}
+async function refreshAccount(){role='member';approved=false;if(user&&supabase){const {data}=await supabase.from('members').select('role').eq('user_id',user.id).single();if(data?.role){role=data.role;approved=true;}}$('accountBtn').textContent=user?`${user.email?.split('@')[0]} · Account / Password`:'Member sign in ↗';document.querySelectorAll('[data-private],[data-home-private]').forEach(e=>e.hidden=!approved);$('nav').hidden=!approved;$('accessNotice').hidden=approved;$('accessNotice').innerHTML=approved?'':'🔒 This planning portal requires an approved member account. <button type="button" id="accessLogin" class="primary small">Member sign in</button>';const login=$('accessLogin');if(login)login.onclick=()=>$('authDialog').showModal();if(!approved)navigate('home');$('signOutButton').hidden=!user;document.querySelectorAll('.admin-only').forEach(e=>e.hidden=role!=='admin'||!approved);await loadSharedData();renderRooms();if(location.hash==='#chat')loadMessages();}
 async function loadSharedData(){if(!supabase||!user||!approved)return;const roster=await supabase.from('committee_roster').select('committee,display_name').order('display_name');if(!roster.error){committees.forEach(c=>c.members=roster.data.filter(x=>x.committee===c.name).map(x=>x.display_name));}renderCommittees();let [a,b]=await Promise.all([supabase.from('milestones').select('id,title,committee,status,due_date').order('created_at'),supabase.from('events').select('id,title,date,description').order('date')]);if(!a.error&&a.data?.length)milestones=a.data;if(!b.error&&b.data?.length)events=b.data;renderMilestones();renderCalendar();await loadBudget();}
 $('accessLogin')?.addEventListener('click',()=> $('authDialog').showModal());
-$('accountBtn').onclick=async()=>{if(user&&supabase){await supabase.auth.signOut();return;}$('authDialog').showModal();};
+$('accountBtn').onclick=()=>showAccountDialog();
 const authFeedback=(message)=>{$('authMessage').textContent=message;};
 $('signInButton').onclick=async()=>{
  if(!supabase){authFeedback('Sign-in is not configured.');return;}
@@ -50,7 +101,17 @@ $('resetPasswordButton').onclick=async()=>{
  const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
  authFeedback(error?error.message:'If this email is registered, a password reset email will arrive.');
 };
-$('savePasswordButton').onclick=async()=>{const password=$('authPassword').value;if(password.length<8){authFeedback('Use at least 8 characters.');return;}const {error}=await supabase.auth.updateUser({password});authFeedback(error?error.message:'Password saved. You can sign in with it next time.');if(!error)$('savePasswordButton').hidden=true;};
+$('savePasswordButton').onclick=async()=>{
+ if(!supabase||!user){authFeedback('Your login session has expired. Sign in again.');return;}
+ const password=$('authPassword').value;
+ if(password.length<8){authFeedback('Use at least 8 characters.');return;}
+ const {error}=await supabase.auth.updateUser({password});
+ if(error){authFeedback(error.message);return;}
+ recoveryMode=false;
+ $('authPassword').value='';
+ $('savePasswordButton').hidden=true;
+ authFeedback('Password saved. You can use it to sign in next time.');
+};
 $('signOutButton').onclick=async()=>{await supabase?.auth.signOut();$('authDialog').close();};
 
 $('chatForm').onsubmit=async ev=>{ev.preventDefault();if(!supabase||!user||!approved||room==='announcements'&&role!=='admin')return;let body=$('chatInput').value.trim();if(!body)return;const {error}=await supabase.from('messages').insert({room_id:room,body,display_name:user.email?.split('@')[0]||'Member'});if(error){alert(`Could not send: ${error.message}`);return;}$('chatInput').value='';await loadMessages();};

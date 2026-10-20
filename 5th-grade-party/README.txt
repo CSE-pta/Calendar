@@ -1,7 +1,9 @@
-CSE Fifth Grade Party privacy/login update
-Upload index.html, app.js, styles.css ONLY into Calendar/5th-grade-party/. Do not upload a new config.js.
-Optional: run private-roster-schema.sql in Supabase SQL Editor to hold private committee member names.
-Only approved logged-in members see private sections. Server-side Supabase RLS must remain enabled.
-Documents are placeholders; never place confidential files into the publicly readable GitHub repo. Use a private Supabase Storage bucket with policies before adding uploads.
-If login buttons do nothing, open developer Console and check the first red error, especially failure to load app.js or config.js.
-For existing magic-link users, reset password email is needed once, and must be opened in the same browser.
+CSE 5th Grade Party — Password Recovery Repair
+
+Fixes: recovery dialog closed immediately after clicking a Supabase recovery email.
+Adds: Account / Password button for signed-in users, allowing password creation without a second email.
+
+Upload app.js and index.html to CSE-pta/Calendar/5th-grade-party/ (replace existing files).
+Leave config.js, database and all other website files alone.
+Wait for GitHub Pages deployment, refresh the site. If logged in, click Account / Password in the upper right, enter a NEW password (8+ characters), click Save new password. Then optionally sign out and test sign-in.
+Never send your password or API secret through ChatGPT.
