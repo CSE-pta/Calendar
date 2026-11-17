@@ -8,14 +8,152 @@ const committees=[
 {name:'Upstairs',icon:'🏫',desc:'Upstairs layout and staffing.',members:[]}
 ];
 const seedMilestones=[['Finalize multiverse design plan','Decorating'],['Confirm landmark stations','Decorating'],['Create decoration supply list','Decorating'],['Select food menu','Food'],['Get food pricing and quantities','Food'],['Finalize serving plan','Food'],['Choose games and activities','Entertainment'],['Develop party run of show','Entertainment'],['Confirm sound and music needs','Entertainment'],['Choose fundraising activities','Fundraising'],['Coordinate possible Texas Roadhouse night','Fundraising'],['Track donations and revenue','Fundraising'],['Choose souvenir items','Swag'],['Approve designs and quantities','Swag'],['Place orders before deadline','Swag'],['Define upstairs area responsibilities','Upstairs'],['Approve upstairs layout','Upstairs'],['Assign day-of volunteers','Upstairs']].map(([title,committee],i)=>({id:`seed-${i}`,title,committee,status:'Not started',due_date:null}));
-const baseEvents=[{id:'meeting-nov16',title:'5th Grade Party Planning Meeting',date:'2026-11-16',description:'6:30 PM · Location TBD'}];
+const baseEvents = [
+  {id:'meeting-nov16', title:'5th Grade Party Planning Meeting', date:'2026-11-16', description:'6:30 PM · Location TBD'},
+  {id:'hollygram-sales', title:'Hollygram Sales Begin', date:'2026-12-07'},
+  {id:'hollygram-meeting', title:'Hollygram Meeting', date:'2026-12-16', description:'6:30 PM · Kids are needed for this meeting.'},
+  {id:'december-planning', title:'5th Grade Party Planning Meeting', date:'2026-12-16', description:'Immediately after the Hollygram meeting · Kids will be with a teacher during party planning.'},
+  {id:'party-day', title:'5th Grade Party', date:'2027-05-21'}
+];
 const roomDefs=[['general','🌎','General Planning','Ideas and coordination across all committees.'],['announcements','📣','Announcements','Official updates from administrators; all members can read.'],...committees.map(c=>[c.name.toLowerCase(),'#',c.name,`${c.name} committee discussion.`])];
 const $=id=>document.getElementById(id);let supabase=null,user=null,recoveryMode=false,approved=false,role='member',room='general',milestones=[...seedMilestones],events=[...baseEvents],month=new Date(2026,10,1),chatChannel=null,publicNames=new Map(),myName='';
 const configured=!!(SUPABASE_URL&&SUPABASE_ANON_KEY),clean=s=>String(s??'');
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
 function navigate(page){if(!$(page))return;if(page!=='home'&&!approved){page='home';if(location.hash!=='#home')history.replaceState(null,'',location.pathname+'#home');/* Sign-in is available in the header only. */}document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id===page));document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('selected',a.dataset.nav===page));$('nav').classList.remove('open');window.scrollTo(0,0);if(page==='chat')loadMessages();if(page==='profile')fillProfile();}
 document.querySelectorAll('[data-go]').forEach(x=>x.addEventListener('click',()=>{location.hash=x.dataset.go;}));window.addEventListener('hashchange',()=>navigate(location.hash.slice(1)||'home'));document.querySelectorAll('[data-nav]').forEach(x=>x.addEventListener('click',()=>{}));$('menuToggle').setAttribute('aria-expanded','false');$('menuToggle').onclick=()=>{const open=$('nav').classList.toggle('open');$('menuToggle').setAttribute('aria-expanded',String(open));};document.querySelectorAll('[data-nav]').forEach(link=>link.addEventListener('click',()=>{$('nav').classList.remove('open');$('menuToggle').setAttribute('aria-expanded','false');}));
-function renderCommittees(){const grid=$('committeeGrid');grid.replaceChildren();if(!approved)return;committees.forEach(c=>{let card=el('article',undefined,'committee-card');card.append(el('div',c.icon,'emoji'),el('h3',c.name),el('p',c.desc));let members=el('div',undefined,'roster-table');if(!c.members.length){members.append(el('p','Roster not loaded yet. An administrator can import the volunteer list.','muted'));}for(const m of c.members){const line=el('div',undefined,'roster-person');line.append(el('strong',m.display_name),el('span',m.registered?'Registered':'Not yet verified','roster-state '+(m.registered?'yes':'no')));if(role==='admin'&&!m.registered){const btn=el('button','Link account','icon-button');btn.onclick=async()=>{const email=prompt('Enter this volunteer’s registered email address to link their account. This email will not be displayed.');if(!email)return;const {data,error}=await supabase.rpc('party_link_roster',{p_roster_id:m.id,p_email:email.trim()});if(error){alert(error.message);return;}if(!data){alert('No account matches that email yet. The person needs to register first.');return;}await loadSharedData();};line.append(btn);}members.append(line);}card.append(members,el('p',`${c.members.length} listed volunteer(s) · ${c.members.filter(m=>m.registered).length} registered`));grid.append(card);});}
+let rosterEdit = null;
+let ownCommittees = null;
+let rosterBusy = false;
+
+function rosterButton(label, action) {
+  const button = el('button', label, 'outline small');
+  button.type = 'button';
+  button.onclick = action;
+  return button;
+}
+
+function openRosterEditor(committee, member = null) {
+  rosterEdit = member;
+  $('rosterHeading').textContent = member ? `Move ${member.display_name}` : 'Add volunteer';
+  $('rosterName').value = member?.display_name || '';
+  $('rosterName').disabled = Boolean(member);
+  $('rosterName').parentElement.hidden = Boolean(member);
+  $('rosterCommittee').value = committee;
+  $('rosterError').textContent = '';
+  $('rosterDialog').showModal();
+}
+
+async function saveRosterChange(request, status = $('rosterMessage')) {
+  if (rosterBusy || !approved) return false;
+  rosterBusy = true;
+  status.textContent = 'Saving…';
+  try {
+    const {error} = await request();
+    if (error) throw error;
+    await loadCommitteeRoster();
+    status.textContent = 'Committee roster updated.';
+    return true;
+  } catch (error) {
+    status.textContent = error.message || 'Could not update the roster.';
+    return false;
+  } finally {
+    rosterBusy = false;
+  }
+}
+
+$('closeRoster').onclick = () => $('rosterDialog').close();
+$('rosterForm').onsubmit = async event => {
+  event.preventDefault();
+  const committee = $('rosterCommittee').value;
+  const name = $('rosterName').value.trim();
+  if (!rosterEdit && !name) return;
+  const button = $('saveRoster');
+  button.disabled = true;
+  try {
+    const saved = await saveRosterChange(() => supabase.rpc('party_manage_roster', {
+      p_action: rosterEdit ? 'move' : 'add',
+      p_roster_id: rosterEdit?.id ?? null,
+      p_committee: committee,
+      p_name: name
+    }), $('rosterError'));
+    if (saved) {
+      $('rosterDialog').close();
+      $('rosterMessage').textContent = 'Committee roster updated.';
+    }
+  } finally {
+    button.disabled = false;
+  }
+};
+
+function renderCommittees() {
+  const grid = $('committeeGrid');
+  grid.replaceChildren();
+  if (!approved) return;
+  for (const committee of committees) {
+    const card = el('article', undefined, 'committee-card');
+    card.append(el('div', committee.icon, 'emoji'), el('h3', committee.name), el('p', committee.desc));
+    const members = el('div', undefined, 'roster-table');
+    if (!committee.members.length) members.append(el('p', 'No volunteers listed.', 'muted'));
+    for (const member of committee.members) {
+      const row = el('div', undefined, 'roster-person');
+      row.append(el('strong', member.display_name), el('span', member.registered ? 'Registered' : 'Not yet verified',
+        'roster-state ' + (member.registered ? 'yes' : 'no')));
+      if (role === 'admin') {
+        const actions = el('div', undefined, 'roster-actions');
+        if (!member.registered) actions.append(rosterButton('Link account', async () => {
+          const email = prompt('Enter this volunteer’s registered email address.');
+          if (!email?.trim()) return;
+          await saveRosterChange(async () => {
+            const result = await supabase.rpc('party_link_roster', {p_roster_id: member.id, p_email: email.trim()});
+            if (!result.error && !result.data) throw new Error('No account matches that email. Ask the volunteer to register first.');
+            return result;
+          });
+        }));
+        if (ownCommittees !== null) actions.append(
+          rosterButton('Move', () => openRosterEditor(committee.name, member)),
+          rosterButton('Remove', () => {
+            if (confirm(`Remove ${member.display_name} from ${committee.name}?`)) {
+              void saveRosterChange(() => supabase.rpc('party_manage_roster', {
+                p_action: 'remove', p_roster_id: member.id
+              }));
+            }
+          })
+        );
+        row.append(actions);
+      }
+      members.append(row);
+    }
+    card.append(members);
+    const actions = el('div', undefined, 'roster-actions');
+    if (ownCommittees !== null && user?.email_confirmed_at) {
+      const joined = ownCommittees.has(committee.name);
+      actions.append(rosterButton(joined ? 'Leave committee' : 'Join committee', () =>
+        saveRosterChange(() => supabase.rpc('party_set_my_committee', {p_committee: committee.name, p_join: !joined}))
+      ));
+    }
+    if (ownCommittees !== null && role === 'admin') {
+      actions.append(rosterButton('Add volunteer', () => openRosterEditor(committee.name)));
+    }
+    card.append(actions, el('p', `${committee.members.length} listed · ${committee.members.filter(m => m.registered).length} registered`));
+    grid.append(card);
+  }
+}
+
+async function loadCommitteeRoster() {
+  const account = user;
+  const [roster, own] = await Promise.all([
+    supabase.rpc('party_committee_roster'), supabase.rpc('party_my_committees')
+  ]);
+  if (account?.id !== user?.id || !approved) return;
+  if (roster.error) throw roster.error;
+  for (const committee of committees) {
+    committee.members = (roster.data || []).filter(row => row.committee === committee.name);
+  }
+  ownCommittees = own.error ? null : new Set(own.data || []);
+  renderCommittees();
+  if (own.error && role === 'admin') $('rosterMessage').textContent = 'Apply the committee management SQL update to enable roster changes.';
+}
+
 function renderMilestones(){let fil=$('milestoneFilter').value;let filtered=milestones.filter(m=>fil==='All'||m.committee===fil);let done=filtered.filter(m=>m.status==='Completed').length;$('milestoneSummary').textContent=`${done} / ${filtered.length} complete`;let list=$('milestoneList');list.replaceChildren();filtered.forEach(m=>{let item=el('div',undefined,'milestone');item.append(el('i',m.status==='Completed'?'✓':'◎'));let desc=el('div');desc.append(el('h3',m.title),el('p',`${m.committee} · ${m.due_date||'Due date TBD'}`));item.append(desc,el('span',m.status,'status '+(m.status==='Completed'?'completed':'')));if(role==='admin'&&approved&&typeof m.id==='number'){let b=el('button','Edit','icon-button');b.title='Update milestone';b.onclick=()=>openMilestoneEdit(m);item.append(b);}list.append(item);});}
 function renderCalendar(){const fmt=new Intl.DateTimeFormat('en-US',{month:'long',year:'numeric'});$('monthLabel').textContent=fmt.format(month);let y=month.getFullYear(),m=month.getMonth(),start=new Date(y,m,1).getDay(),total=new Date(y,m+1,0).getDate(),grid=$('calendarGrid');grid.replaceChildren();for(let i=0;i<start;i++)grid.append(el('div','','day other'));for(let d=1;d<=total;d++){let date=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;let match=events.filter(e=>e.date===date);let day=el('div',d,'day '+(match.length?'event':''));match.forEach(e=>day.append(el('small',e.title)));grid.append(day);}const list=$('eventList');list.replaceChildren();events.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{let wrapper=el('div',undefined,'event-item'),d=el('div',new Date(e.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}),'event-date'),details=el('div');details.append(el('strong',e.title),el('p',e.description||e.date));wrapper.append(d,details);list.append(wrapper);});}
 function renderRooms(){const wrap=$('roomButtons');wrap.replaceChildren();roomDefs.forEach(([id,icon,name])=>{let b=el('button',`${icon}  ${name}`,'room-btn'+(id===room?' active':''));b.onclick=()=>{room=id;renderRooms();loadMessages();};wrap.append(b);});let r=roomDefs.find(r=>r[0]===room);$('roomTitle').textContent='# '+r[2].toLowerCase().replaceAll(' ','-');$('roomDescription').textContent=r[3];$('roomTag').textContent=room==='announcements'?'Admin posts only':'Team room';let allowed=!!user&&approved&&(room!=='announcements'||role==='admin');$('chatInput').disabled=!allowed;$('chatSend').disabled=!allowed;$('chatInput').placeholder=!configured?'Chat setup required...':!user?'Sign in to post a message...':!allowed?'Only admins can post in this channel...':'Share an idea with the team...';}
@@ -89,12 +227,20 @@ async function initBackend(){
   console.error('Supabase initialization failed',e);
  }
 }
-async function refreshAccount(){role='member';approved=false;myName='';if(user&&supabase){const {data}=await supabase.from('members').select('role,display_name').eq('user_id',user.id).single();if(data?.role){role=data.role;approved=true;myName=data.display_name||'';}}$('accountBtn').hidden=!user;$('accountBtn').textContent=user?`${approved?(myName||'My Account'):'My Account'} · Account / Password`:'Account / Password';document.querySelectorAll('[data-private],[data-home-private]').forEach(e=>e.hidden=!approved);$('nav').hidden=!approved;$('accessNotice').hidden=!!user;const login=$('accessLogin');if(login)login.onclick=showSignInDialog;if(!approved)navigate('home');$('signOutButton').hidden=!user;document.querySelectorAll('.admin-only').forEach(e=>e.hidden=role!=='admin'||!approved);await loadSharedData();renderRooms();if(location.hash==='#chat')loadMessages();if(approved)fillProfile();}
+async function refreshAccount(){role='member';approved=false;myName='';ownCommittees=null;for(const committee of committees)committee.members=[];$('rosterMessage').textContent='';renderCommittees();if(user&&supabase){const {data}=await supabase.from('members').select('role,display_name').eq('user_id',user.id).single();if(data?.role){role=data.role;approved=true;myName=data.display_name||'';}}$('accountBtn').hidden=!user;$('accountBtn').textContent=user?`${approved?(myName||'My Account'):'My Account'} · Account / Password`:'Account / Password';document.querySelectorAll('[data-private],[data-home-private]').forEach(e=>e.hidden=!approved);$('nav').hidden=!approved;$('teamsSummary').hidden=approved;$('accessNotice').hidden=!!user;const login=$('accessLogin');if(login)login.onclick=showSignInDialog;if(!approved)navigate('home');$('signOutButton').hidden=!user;document.querySelectorAll('.admin-only').forEach(e=>e.hidden=role!=='admin'||!approved);await loadSharedData();renderRooms();if(location.hash==='#chat')loadMessages();if(approved)fillProfile();}
 async function loadSharedData(){if(!supabase||!user||!approved)return;
- const [names,roster]=await Promise.all([supabase.rpc('party_member_names'),supabase.rpc('party_committee_roster')]);
+ const [names, a, b] = await Promise.all([
+   supabase.rpc('party_member_names'),
+   supabase.from('milestones').select('id,title,committee,status,due_date').order('created_at'),
+   supabase.from('events').select('id,title,date,description').order('date'),
+   loadCommitteeRoster().catch(() => { $('rosterMessage').textContent = 'Could not load the committee roster.'; })
+ ]);
  if(!names.error){publicNames=new Map((names.data||[]).map(n=>[n.user_id,n.display_name]));myName=publicNames.get(user.id)||myName;}
- if(!roster.error){committees.forEach(c=>c.members=(roster.data||[]).filter(x=>x.committee===c.name).map(x=>({id:x.id,display_name:x.display_name,registered:x.registered})));}
- renderCommittees();let [a,b]=await Promise.all([supabase.from('milestones').select('id,title,committee,status,due_date').order('created_at'),supabase.from('events').select('id,title,date,description').order('date')]);if(!a.error&&a.data?.length)milestones=a.data;if(!b.error&&b.data?.length)events=b.data;renderMilestones();renderCalendar();await loadBudget();if(location.hash==='#chat')await loadMessages();}
+ if(!a.error&&a.data?.length)milestones=a.data;
+ if(!b.error)events=[...baseEvents,...(b.data||[]).filter(event => !baseEvents.some(base =>
+   base.date === event.date && base.title.toLowerCase() === event.title.trim().toLowerCase()
+ ))];
+ renderMilestones();renderCalendar();await loadBudget();if(location.hash==='#chat')await loadMessages();}
 
 
 
@@ -161,5 +307,25 @@ $('closeTransaction').onclick=()=>$('transactionDialog').close();
 $('transactionForm').onsubmit=async e=>{e.preventDefault();if(!supabase||role!=='admin'||!approved)return;let amount=Number($('txAmount').value);if(!Number.isFinite(amount)||amount<=0)return;const {error}=await supabase.from('budget_transactions').insert({kind:$('txType').value,category:$('txCategory').value,description:$('txDescription').value.trim(),amount,entry_date:$('txDate').value});if(error){$('txError').textContent=error.message;return;}$('transactionDialog').close();$('transactionForm').reset();await loadBudget();};
 
 $('prevMonth').onclick=()=>{month=new Date(month.getFullYear(),month.getMonth()-1,1);renderCalendar();};$('nextMonth').onclick=()=>{month=new Date(month.getFullYear(),month.getMonth()+1,1);renderCalendar();};
-committees.forEach(c=>{let a=el('option',c.name);a.value=c.name;$('milestoneFilter').append(a);let b=el('option',c.name);b.value=c.name;$('editCommittee').append(b);});$('milestoneFilter').onchange=renderMilestones;
+committees.forEach(c=>{let a=el('option',c.name);a.value=c.name;$('milestoneFilter').append(a);let b=el('option',c.name);b.value=c.name;$('editCommittee').append(b);$('rosterCommittee').append(el('option',c.name));});$('milestoneFilter').onchange=renderMilestones;
+const partyDate = Date.parse($('partyDate').dateTime);
+const schoolCalendar = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York', year: 'numeric', month: 'numeric', day: 'numeric'
+});
+
+function updatePartyCountdown(now = new Date()) {
+  const {year, month, day} = Object.fromEntries(
+    schoolCalendar.formatToParts(now).map(part => [part.type, Number(part.value)])
+  );
+  const days = (partyDate - Date.UTC(year, month - 1, day)) / 86400000;
+  $('partyCountdown').textContent = days > 0
+    ? `${days} ${days === 1 ? 'day' : 'days'} to go!`
+    : days === 0 ? 'Today is party day!' : 'Party day has passed';
+}
+updatePartyCountdown();
+setInterval(updatePartyCountdown, 60000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) updatePartyCountdown();
+});
+
 renderCommittees();renderMilestones();renderCalendar();renderRooms();navigate(location.hash.slice(1)||'home');initBackend();

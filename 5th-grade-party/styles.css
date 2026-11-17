@@ -83,3 +83,22 @@ button,a,input,select,textarea{touch-action:manipulation}
  .chat-compose button{padding:9px 11px}
 }
 @media(prefers-reduced-motion:reduce){.portal{animation:none}html{scroll-behavior:auto}}
+
+.teams-link {
+  text-align: left;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.teams-link:hover, .teams-link:focus-visible {
+  border-color: #356db1;
+  background: #fff;
+}
+.roster-person { flex-wrap: wrap; gap: .5rem; }
+.roster-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
+.roster-table + .roster-actions { margin-top: .75rem; }
+
+.stat-card .party-countdown {
+  color: #154e78;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
